@@ -548,6 +548,12 @@ func NewMSNewReplicas(deployment *clusterv1.MachineDeployment, allMSs []*cluster
 		// Do not exceed the number of desired replicas.
 		scaleUpCount = integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas))
 		return *(newMS.Spec.Replicas) + scaleUpCount, nil
+	case clusterv1.OnDeleteMachineDeploymentStrategyType:
+		// Find the total number of machines
+		currentMachineCount := TotalMachineSetsReplicaSum(allMSs)
+		scaleUpCount := *(deployment.Spec.Replicas) - currentMachineCount
+		scaleUpCount = integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas))
+		return *(newMS.Spec.Replicas) + scaleUpCount, nil
 	default:
 		return 0, fmt.Errorf("deployment strategy %v isn't supported", deployment.Spec.Strategy.Type)
 	}
