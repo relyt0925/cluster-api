@@ -130,6 +130,10 @@ type MachineSetStatus struct {
 	// +optional
 	AvailableReplicas int32 `json:"availableReplicas,omitempty"`
 
+	// The number of replicas in the process of deleting for this MachineSet.
+	// +optional
+	DeletingReplicas int32 `json:"deletingReplicas,omitempty"`
+
 	// ObservedGeneration reflects the generation of the most recently observed MachineSet.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

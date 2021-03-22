@@ -511,6 +511,10 @@ spec:
                 description: The number of available replicas (ready for at least minReadySeconds) for this MachineSet.
                 format: int32
                 type: integer
+              deletingReplicas:
+                description: The number of replicas in the process of deleting for this MachineSet.
+                format: int32
+                type: integer
               failureMessage:
                 type: string
               failureReason:

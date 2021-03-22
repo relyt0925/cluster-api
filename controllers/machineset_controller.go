@@ -609,6 +609,7 @@ func (r *MachineSetReconciler) calculateStatus(ctx context.Context, cluster *clu
 	fullyLabeledReplicasCount := 0
 	readyReplicasCount := 0
 	availableReplicasCount := 0
+	deletingReplicasCount := 0
 	templateLabel := labels.Set(ms.Spec.Template.Labels).AsSelectorPreValidated()
 
 	for _, machine := range filteredMachines {
@@ -619,6 +620,10 @@ func (r *MachineSetReconciler) calculateStatus(ctx context.Context, cluster *clu
 		if machine.Status.NodeRef == nil {
 			log.V(2).Info("Unable to retrieve Node status, missing NodeRef", "machine", machine.Name)
 			continue
+		}
+
+		if machine.DeletionTimestamp != nil {
+			deletingReplicasCount++
 		}
 
 		node, err := r.getMachineNode(ctx, cluster, machine)
