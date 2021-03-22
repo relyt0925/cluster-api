@@ -644,6 +644,7 @@ func (r *MachineSetReconciler) calculateStatus(ctx context.Context, cluster *clu
 	newStatus.FullyLabeledReplicas = int32(fullyLabeledReplicasCount)
 	newStatus.ReadyReplicas = int32(readyReplicasCount)
 	newStatus.AvailableReplicas = int32(availableReplicasCount)
+	newStatus.DeletingReplicas = int32(deletingReplicasCount)
 	return newStatus, nil
 }
 
@@ -657,6 +658,7 @@ func (r *MachineSetReconciler) patchMachineSetStatus(ctx context.Context, ms *cl
 	if ms.Status.Replicas == newStatus.Replicas &&
 		ms.Status.FullyLabeledReplicas == newStatus.FullyLabeledReplicas &&
 		ms.Status.ReadyReplicas == newStatus.ReadyReplicas &&
+		ms.Status.DeletingReplicas == newStatus.DeletingReplicas &&
 		ms.Status.AvailableReplicas == newStatus.AvailableReplicas &&
 		ms.Generation == ms.Status.ObservedGeneration {
 		return ms, nil
@@ -677,6 +679,7 @@ func (r *MachineSetReconciler) patchMachineSetStatus(ctx context.Context, ms *cl
 		fmt.Sprintf("replicas %d->%d (need %d), ", ms.Status.Replicas, newStatus.Replicas, replicas) +
 		fmt.Sprintf("fullyLabeledReplicas %d->%d, ", ms.Status.FullyLabeledReplicas, newStatus.FullyLabeledReplicas) +
 		fmt.Sprintf("readyReplicas %d->%d, ", ms.Status.ReadyReplicas, newStatus.ReadyReplicas) +
+		fmt.Sprintf("deletingReplicas %d->%d, ", ms.Status.DeletingReplicas, newStatus.DeletingReplicas) +
 		fmt.Sprintf("availableReplicas %d->%d, ", ms.Status.AvailableReplicas, newStatus.AvailableReplicas) +
 		fmt.Sprintf("sequence No: %v->%v", ms.Status.ObservedGeneration, newStatus.ObservedGeneration))
 
