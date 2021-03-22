@@ -18,10 +18,10 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	"sigs.k8s.io/cluster-api/controllers/mdutil"
-	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -42,7 +42,7 @@ func (r *MachineDeploymentReconciler) onDeleteUpgrade(ctx context.Context, d *cl
 	allMSs := append(oldMSs, newMS)
 
 	// Scale down, if we can.
-	if err := r.reconcileOldMachineSetsOnDelete(ctx, oldMSs, d); err != nil {
+	if err := r.reconcileOldMachineSetsOnDelete(ctx, oldMSs, allMSs, d); err != nil {
 		return err
 	}
 
@@ -68,44 +68,62 @@ func (r *MachineDeploymentReconciler) onDeleteUpgrade(ctx context.Context, d *cl
 	return nil
 }
 
-func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx context.Context, oldMSs []*clusterv1.MachineSet, deployment *clusterv1.MachineDeployment) error {
+func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx context.Context, oldMSs []*clusterv1.MachineSet, allMSs []*clusterv1.MachineSet, deployment *clusterv1.MachineDeployment) error {
 	log := ctrl.LoggerFrom(ctx)
-	log.V(4).Info("HI")
-
 	if deployment.Spec.Replicas == nil {
 		return errors.Errorf("spec replicas for MachineDeployment %q/%q is nil, this is unexpected",
 			deployment.Namespace, deployment.Name)
 	}
-
+	log.V(4).Info("Checking to see if machines have been deleted or are in the process of deleting for old machine sets")
+	totalReplicas := mdutil.GetReplicaCountForMachineSets(allMSs)
+	scaleDownAmount := totalReplicas - *deployment.Spec.Replicas
 	for _, oldMS := range oldMSs {
-		if oldMS.Spec.Replicas == nil || *oldMS.Spec.Replicas == 0 {
-			//already scaled down all the way
+		if oldMS.Spec.Replicas == nil || *oldMS.Spec.Replicas <= 0 {
+			log.V(4).Info(fmt.Sprintf("MachineSet %s fully scaled down", oldMS.Name))
 			continue
 		}
-		newReplicaCount := oldMS.Status.Replicas - oldMS.Status.DeletingReplicas
-		if newReplicaCount < 0 {
-			//error
-			continue
+		updatedReplicaCount := oldMS.Status.Replicas - oldMS.Status.DeletingReplicas
+		if updatedReplicaCount < 0 {
+			return errors.Errorf("negative updated replica count %d for MachineSet %q/%q, this is unexpected", updatedReplicaCount, oldMS.Namespace, oldMS.Name)
 		}
-		if newReplicaCount < *oldMS.Spec.Replicas {
-			patchHelper, err := patch.NewHelper(oldMS, r.Client)
-			if err != nil {
-				return err
-			}
-			oldMS.Spec.Replicas = &newReplicaCount
-			err = patchHelper.Patch(ctx, oldMS)
-			if err != nil {
-				return err
-			}
+		machineSetScaleDownAmountDueToMachineDeletion := *oldMS.Spec.Replicas - updatedReplicaCount
+		if machineSetScaleDownAmountDueToMachineDeletion < 0 {
+			log.V(4).Error(errors.Errorf("unexpected negative scale down amount: %d", machineSetScaleDownAmountDueToMachineDeletion), fmt.Sprintf("Error reconciling MachineSet %s", oldMS.Name))
+		}
+		scaleDownAmount = scaleDownAmount - machineSetScaleDownAmountDueToMachineDeletion
+		log.V(4).Info(fmt.Sprintf("Scaling MachineSet %s to %d", oldMS.Name, updatedReplicaCount))
+		if err := r.scaleMachineSet(ctx, oldMS, updatedReplicaCount, deployment); err != nil {
+			return err
 		}
 	}
-
+	log.V(4).Info("Finished reconcile of Old MachineSets due to machine deletion. Now analyzing if there's more potential to scale down")
+	for _, oldMS := range oldMSs {
+		if scaleDownAmount <= 0 {
+			break
+		}
+		if oldMS.Spec.Replicas == nil || *oldMS.Spec.Replicas <= 0 {
+			log.V(4).Info(fmt.Sprintf("MachineSet %s fully scaled down", oldMS.Name))
+			continue
+		}
+		updatedReplicaCount := *oldMS.Spec.Replicas
+		if updatedReplicaCount >= scaleDownAmount {
+			updatedReplicaCount = updatedReplicaCount - scaleDownAmount
+			scaleDownAmount = 0
+		} else {
+			scaleDownAmount = scaleDownAmount - updatedReplicaCount
+			updatedReplicaCount = 0
+		}
+		log.V(4).Info(fmt.Sprintf("Scaling MachineSet %s to %d", oldMS.Name, updatedReplicaCount))
+		if err := r.scaleMachineSet(ctx, oldMS, updatedReplicaCount, deployment); err != nil {
+			return err
+		}
+	}
+	log.V(4).Info("Finished reconcile of all old MachineSets")
 	return nil
 }
 
-func (r *MachineDeploymentReconciler) reconcileNewMachineSetOnDelete(ctx context.Context, oldMSs []*clusterv1.MachineSet, newMS *clusterv1.MachineSet, deployment *clusterv1.MachineDeployment) error {
+func (r *MachineDeploymentReconciler) reconcileNewMachineSetOnDelete(ctx context.Context, allMSs []*clusterv1.MachineSet, newMS *clusterv1.MachineSet, deployment *clusterv1.MachineDeployment) error {
 	log := ctrl.LoggerFrom(ctx)
-	log.V(4).Info("HI")
 
 	if deployment.Spec.Replicas == nil {
 		return errors.Errorf("spec replicas for MachineDeployment %q/%q is nil, this is unexpected",
@@ -117,17 +135,13 @@ func (r *MachineDeploymentReconciler) reconcileNewMachineSetOnDelete(ctx context
 			newMS.Namespace, newMS.Name)
 	}
 
-	totalOldReplicas := mdutil.GetActualReplicaCountForMachineSets(oldMSs)
-	availableSizeUpForNewReplicas := *deployment.Spec.Replicas - *newMS.Spec.Replicas - totalOldReplicas
+	log.V(4).Info(fmt.Sprintf("Checking to see if MachineSet %s can scale up", newMS.Name))
+	totalReplicas := mdutil.TotalMachineSetsReplicaSum(allMSs)
+	availableSizeUpForNewReplicas := *deployment.Spec.Replicas - totalReplicas
 	if availableSizeUpForNewReplicas > 0 {
 		newSize := *newMS.Spec.Replicas + availableSizeUpForNewReplicas
-		patchHelper, err := patch.NewHelper(newMS, r.Client)
-		if err != nil {
-			return err
-		}
-		newMS.Spec.Replicas = &newSize
-		err = patchHelper.Patch(ctx, newMS)
-		if err != nil {
+		log.V(4).Info(fmt.Sprintf("Scaling up if MachineSet %s can scale up", newMS.Name))
+		if err := r.scaleMachineSet(ctx, newMS, newSize, deployment); err != nil {
 			return err
 		}
 	}

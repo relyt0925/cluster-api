@@ -515,6 +515,11 @@ func IsRollingUpdate(deployment *clusterv1.MachineDeployment) bool {
 	return deployment.Spec.Strategy.Type == clusterv1.RollingUpdateMachineDeploymentStrategyType
 }
 
+// IsRollingUpdate returns true if the strategy type is a rolling update.
+func IsOnDeleteUpdate(deployment *clusterv1.MachineDeployment) bool {
+	return deployment.Spec.Strategy.Type == clusterv1.OnDeleteMachineDeploymentStrategyType
+}
+
 // DeploymentComplete considers a deployment to be complete once all of its desired replicas
 // are updated and available, and no old machines are running.
 func DeploymentComplete(deployment *clusterv1.MachineDeployment, newStatus *clusterv1.MachineDeploymentStatus) bool {
