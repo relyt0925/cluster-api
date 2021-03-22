@@ -41,8 +41,8 @@ func (r *MachineDeploymentReconciler) onDeleteUpgrade(ctx context.Context, d *cl
 
 	allMSs := append(oldMSs, newMS)
 
-	// Scale down, if we can.
-	if err := r.reconcileOldMachineSetsOnDelete(ctx, oldMSs, allMSs, d); err != nil {
+	// Scale up, if we can.
+	if err := r.reconcileNewMachineSetOnDelete(ctx, allMSs, newMS, d); err != nil {
 		return err
 	}
 
@@ -50,8 +50,8 @@ func (r *MachineDeploymentReconciler) onDeleteUpgrade(ctx context.Context, d *cl
 		return err
 	}
 
-	// Scale up, if we can.
-	if err := r.reconcileNewMachineSetOnDelete(ctx, allMSs, newMS, d); err != nil {
+	// Scale down, if we can.
+	if err := r.reconcileOldMachineSetsOnDelete(ctx, oldMSs, allMSs, d); err != nil {
 		return err
 	}
 
