@@ -515,11 +515,6 @@ func IsRollingUpdate(deployment *clusterv1.MachineDeployment) bool {
 	return deployment.Spec.Strategy.Type == clusterv1.RollingUpdateMachineDeploymentStrategyType
 }
 
-// IsRollingUpdate returns true if the strategy type is a rolling update.
-func IsOnDeleteUpdate(deployment *clusterv1.MachineDeployment) bool {
-	return deployment.Spec.Strategy.Type == clusterv1.OnDeleteMachineDeploymentStrategyType
-}
-
 // DeploymentComplete considers a deployment to be complete once all of its desired replicas
 // are updated and available, and no old machines are running.
 func DeploymentComplete(deployment *clusterv1.MachineDeployment, newStatus *clusterv1.MachineDeploymentStatus) bool {
@@ -556,8 +551,11 @@ func NewMSNewReplicas(deployment *clusterv1.MachineDeployment, allMSs []*cluster
 	case clusterv1.OnDeleteMachineDeploymentStrategyType:
 		// Find the total number of machines
 		currentMachineCount := TotalMachineSetsReplicaSum(allMSs)
+		if currentMachineCount >= *(deployment.Spec.Replicas) {
+			// Cannot scale up.
+			return *(newMS.Spec.Replicas), nil
+		}
 		scaleUpCount := *(deployment.Spec.Replicas) - currentMachineCount
-		scaleUpCount = integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas))
 		return *(newMS.Spec.Replicas) + scaleUpCount, nil
 	default:
 		return 0, fmt.Errorf("deployment strategy %v isn't supported", deployment.Spec.Strategy.Type)

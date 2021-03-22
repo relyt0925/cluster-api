@@ -51,7 +51,7 @@ func (r *MachineDeploymentReconciler) onDeleteUpgrade(ctx context.Context, d *cl
 	}
 
 	// Scale up, if we can.
-	if err := r.reconcileNewMachineSetOnDelete(ctx, oldMSs, newMS, d); err != nil {
+	if err := r.reconcileNewMachineSetOnDelete(ctx, allMSs, newMS, d); err != nil {
 		return err
 	}
 
@@ -123,8 +123,6 @@ func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx contex
 }
 
 func (r *MachineDeploymentReconciler) reconcileNewMachineSetOnDelete(ctx context.Context, allMSs []*clusterv1.MachineSet, newMS *clusterv1.MachineSet, deployment *clusterv1.MachineDeployment) error {
-	log := ctrl.LoggerFrom(ctx)
-
 	if deployment.Spec.Replicas == nil {
 		return errors.Errorf("spec replicas for MachineDeployment %q/%q is nil, this is unexpected",
 			deployment.Namespace, deployment.Name)
@@ -135,15 +133,22 @@ func (r *MachineDeploymentReconciler) reconcileNewMachineSetOnDelete(ctx context
 			newMS.Namespace, newMS.Name)
 	}
 
-	log.V(4).Info(fmt.Sprintf("Checking to see if MachineSet %s can scale up", newMS.Name))
-	totalReplicas := mdutil.TotalMachineSetsReplicaSum(allMSs)
-	availableSizeUpForNewReplicas := *deployment.Spec.Replicas - totalReplicas
-	if availableSizeUpForNewReplicas > 0 {
-		newSize := *newMS.Spec.Replicas + availableSizeUpForNewReplicas
-		log.V(4).Info(fmt.Sprintf("Scaling up if MachineSet %s can scale up", newMS.Name))
-		if err := r.scaleMachineSet(ctx, newMS, newSize, deployment); err != nil {
-			return err
-		}
+	if *(newMS.Spec.Replicas) == *(deployment.Spec.Replicas) {
+		// Scaling not required.
+		return nil
 	}
+
+	if *(newMS.Spec.Replicas) > *(deployment.Spec.Replicas) {
+		// Scale down.
+		err := r.scaleMachineSet(ctx, newMS, *(deployment.Spec.Replicas), deployment)
+		return err
+	}
+
+	newReplicasCount, err := mdutil.NewMSNewReplicas(deployment, allMSs, newMS)
+	if err != nil {
+		return err
+	}
+	err = r.scaleMachineSet(ctx, newMS, newReplicasCount, deployment)
+
 	return nil
 }
