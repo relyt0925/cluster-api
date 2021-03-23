@@ -96,7 +96,7 @@ func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx contex
 			return err
 		}
 	}
-	log.V(4).Info("Finished reconcile of Old MachineSets due to machine deletion. Now analyzing if there's more potential to scale down")
+	log.V(4).Info("Finished reconcile of Old MachineSets to account for deleted machines. Now analyzing if there's more potential to scale down")
 	for _, oldMS := range oldMSs {
 		if scaleDownAmount <= 0 {
 			break
