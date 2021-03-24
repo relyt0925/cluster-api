@@ -28,6 +28,9 @@ const (
 	// i.e. gradually scale down the old MachineSet and scale up the new one.
 	RollingUpdateMachineDeploymentStrategyType MachineDeploymentStrategyType = "RollingUpdate"
 
+	// Replace old MachineSets when the deletion of the associated machines are completed.
+	OnDeleteMachineDeploymentStrategyType MachineDeploymentStrategyType = "OnDelete"
+
 	// RevisionAnnotation is the revision annotation of a machine deployment's machine sets which records its rollout sequence
 	RevisionAnnotation = "machinedeployment.clusters.x-k8s.io/revision"
 	// RevisionHistoryAnnotation maintains the history of all old revisions that a machine set has served for a machine deployment.

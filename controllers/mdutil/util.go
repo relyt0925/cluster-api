@@ -548,6 +548,16 @@ func NewMSNewReplicas(deployment *clusterv1.MachineDeployment, allMSs []*cluster
 		// Do not exceed the number of desired replicas.
 		scaleUpCount = integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas))
 		return *(newMS.Spec.Replicas) + scaleUpCount, nil
+	case clusterv1.OnDeleteMachineDeploymentStrategyType:
+		// Find the total number of machines
+		currentMachineCount := TotalMachineSetsReplicaSum(allMSs)
+		if currentMachineCount >= *(deployment.Spec.Replicas) {
+			// Cannot scale up as more replicas exist than desired number of replicas in the MachineDeployment.
+			return *(newMS.Spec.Replicas), nil
+		}
+		// Scale up the latest MachineSet to match the desired number of replicas in the MachineDeployment
+		scaleUpCount := *(deployment.Spec.Replicas) - currentMachineCount
+		return *(newMS.Spec.Replicas) + scaleUpCount, nil
 	default:
 		return 0, fmt.Errorf("deployment strategy %v isn't supported", deployment.Spec.Strategy.Type)
 	}
@@ -696,4 +706,16 @@ func ComputeHash(template *clusterv1.MachineTemplateSpec) uint32 {
 	machineTemplateSpecHasher := fnv.New32a()
 	DeepHashObject(machineTemplateSpecHasher, *template)
 	return machineTemplateSpecHasher.Sum32()
+}
+
+// GetDeletingMachineCount gets the number of machines that are in the process of being deleted
+// in a machineList
+func GetDeletingMachineCount(machineList *clusterv1.MachineList) int32 {
+	var deletingMachineCount int32 = 0
+	for _, machine := range machineList.Items {
+		if machine.DeletionTimestamp != nil {
+			deletingMachineCount++
+		}
+	}
+	return deletingMachineCount
 }
