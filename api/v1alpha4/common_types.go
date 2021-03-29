@@ -38,6 +38,11 @@ const (
 	// on the reconciled object.
 	PausedAnnotation = "cluster.x-k8s.io/paused"
 
+	// DisableMachineCreate is an annotation that can be used to signal a MachineSet to stop creating new machines.
+	// It is utilized in the OnDelete MachineDeploymentStrategy to allow the MachineDeployment controller to scale down
+	// older MachineSets when Machines are deleted and add the new replicas to the latest MachineSet.
+	DisableMachineCreate = "cluster.x-k8s.io/disable-machine-create"
+
 	// TemplateClonedFromNameAnnotation is the infrastructure machine annotation that stores the name of the infrastructure template resource
 	// that was cloned for the machine. This annotation is set only during cloning a template. Older/adopted machines will not have this annotation.
 	TemplateClonedFromNameAnnotation = "cluster.x-k8s.io/cloned-from-name"

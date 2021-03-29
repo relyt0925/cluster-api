@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1alpha4"
 	"sigs.k8s.io/cluster-api/controllers/mdutil"
+	patch2 "sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -85,6 +86,20 @@ func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx contex
 			log.V(4).Info("fully scaled down", "MachineSet", oldMS.Name)
 			continue
 		}
+		if oldMS.Annotations == nil {
+			oldMS.Annotations = map[string]string{}
+		}
+		if _, ok := oldMS.Annotations[clusterv1.DisableMachineCreate]; !ok {
+			patchHelper, err := patch2.NewHelper(oldMS, r.Client)
+			if err != nil {
+				return err
+			}
+			oldMS.Annotations[clusterv1.DisableMachineCreate] = "true"
+			err = patchHelper.Patch(ctx, oldMS)
+			if err != nil {
+				return err
+			}
+		}
 		selectorMap, err := metav1.LabelSelectorAsMap(&oldMS.Spec.Selector)
 		if err != nil {
 			log.V(4).Error(err, "failed to convert MachineSet %q label selector to a map", oldMS.Name)
@@ -143,5 +158,18 @@ func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx contex
 //reconcileNewMachineSetOnDelete handles reconciliation of the latest MachineSet associated with the MachineDeployment in the OnDelete MachineDeploymentStrategyType.
 func (r *MachineDeploymentReconciler) reconcileNewMachineSetOnDelete(ctx context.Context, allMSs []*clusterv1.MachineSet, newMS *clusterv1.MachineSet, deployment *clusterv1.MachineDeployment) error {
 	// logic same as reconcile logic for RollingUpdate
+	if newMS.Annotations != nil {
+		if _, ok := newMS.Annotations[clusterv1.DisableMachineCreate]; ok {
+			patchHelper, err := patch2.NewHelper(newMS, r.Client)
+			if err != nil {
+				return err
+			}
+			delete(newMS.Annotations, clusterv1.DisableMachineCreate)
+			err = patchHelper.Patch(ctx, newMS)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return r.reconcileNewMachineSet(ctx, allMSs, newMS, deployment)
 }
