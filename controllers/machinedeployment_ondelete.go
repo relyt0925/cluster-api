@@ -100,7 +100,7 @@ func (r *MachineDeploymentReconciler) reconcileOldMachineSetsOnDelete(ctx contex
 		if err != nil {
 			return errors.Wrap(err, "failed to list machines")
 		}
-		updatedReplicaCount := oldMS.Status.Replicas - mdutil.GetDeletingMachineCount(allMachinesInOldMS)
+		updatedReplicaCount := int32(len(allMachinesInOldMS.Items)) - mdutil.GetDeletingMachineCount(allMachinesInOldMS)
 		if updatedReplicaCount < 0 {
 			return errors.Errorf("negative updated replica count %d for MachineSet %q, this is unexpected", updatedReplicaCount, oldMS.Name)
 		}
