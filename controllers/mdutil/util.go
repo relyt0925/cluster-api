@@ -722,3 +722,19 @@ func GetDeletingMachineCount(machineList *clusterv1.MachineList) int32 {
 	}
 	return deletingMachineCount
 }
+
+// TotalMachineSetsReplicaSum returns sum of max(ms.Spec.Replicas, ms.Status.Replicas) across all the machine sets.
+//
+// This is used to guarantee that the total number of machines will not exceed md.Spec.Replicas + maxSurge.
+// Use max(spec.Replicas,status.Replicas) to cover the cases that:
+// 1. Scale up, where spec.Replicas increased but no machine created yet, so spec.Replicas > status.Replicas
+// 2. Scale down, where spec.Replicas decreased but machine not deleted yet, so spec.Replicas < status.Replicas.
+func TotalMachineSetsReplicaSum(machineSets []*clusterv1.MachineSet) int32 {
+	totalReplicas := int32(0)
+	for _, ms := range machineSets {
+		if ms != nil {
+			totalReplicas += integer.Int32Max(*(ms.Spec.Replicas), ms.Status.Replicas)
+		}
+	}
+	return totalReplicas
+}
