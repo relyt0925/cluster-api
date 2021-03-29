@@ -308,11 +308,12 @@ func (r *MachineSetReconciler) syncReplicas(ctx context.Context, ms *clusterv1.M
 	case diff < 0:
 		diff *= -1
 		log.Info("Too few replicas", "need", *(ms.Spec.Replicas), "creating", diff)
-		if _, ok := ms.Annotations[clusterv1.DisableMachineCreate]; ok {
-			log.Info("Automatic creation of new machines disabled for machine set")
-			return nil
+		if ms.Annotations != nil {
+			if _, ok := ms.Annotations[clusterv1.DisableMachineCreate]; ok {
+				log.Info("Automatic creation of new machines disabled for machine set")
+				return nil
+			}
 		}
-
 		var (
 			machineList []*clusterv1.Machine
 			errs        []error
